@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Calculator</title>
+    <!-- Google Fonts: Inter for a clean, modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="calculator-container" role="main">
+        <h1>Invoice Calculator</h1>
+
+        <!-- Container for dynamically added product input rows -->
+        <div id="product-list"></div>
+        <!-- Button to add new product rows -->
+        <button id="add-product" class="button button-full-width" type="button">Add Product</button>
+
+        <!-- Service Fee input field -->
+        <label for="service-fee">Service Fee</label>
+        <div class="input-group">
+            <span class="input-prefix">₱</span>
+            <input type="number" id="service-fee" class="input-field" placeholder="0.00" min="0" step="0.01" value="">
+        </div>
+
+        <!-- Delivery Fee input field -->
+        <label for="delivery-fee">Delivery Fee</label>
+        <div class="input-group">
+            <span class="input-prefix">₱</span>
+            <input type="number" id="delivery-fee" class="input-field" placeholder="0.00" min="0" step="0.01" value="">
+        </div>
+
+        <!-- Total display area -->
+        <div class="total">Total: <span id="total">₱0.00</span></div>
+
+        <!-- Summary section, hidden by default and shown by JavaScript -->
+        <div id="summary-section" class="summary-section">
+            <h2>Summary</h2>
+            <!-- Preformatted text area for summary content -->
+            <pre id="summary-content" class="summary-content"></pre>
+            <!-- Button to copy summary to clipboard -->
+            <button id="copy-summary" class="copy-button" type="button">Copy Summary</button>
+        </div>
+    </div>
+
+    <!-- Message box for temporary notifications -->
+    <div id="message-box" class="message-box"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get references to DOM elements
+            const addProductBtn = document.getElementById('add-product');
+            const productList = document.getElementById('product-list');
+            const totalDisplay = document.getElementById('total');
+            const serviceFeeInput = document.getElementById('service-fee');
+            const deliveryFeeInput = document.getElementById('delivery-fee');
+            const summarySection = document.getElementById('summary-section');
+            const summaryContent = document.getElementById('summary-content');
+            const copySummaryBtn = document.getElementById('copy-summary');
+            const messageBox = document.getElementById('message-box');
+
+            let productCounter = 0; // Counter for unique product IDs
+            // Using a Map to store product data for efficient access and updates
+            const productData = new Map(); // Stores { productId: { name: '', price: 0 } }
+
+            // Initialize the calculator with one product row when the page loads
+            addNewProduct();
+
+            /**
+             * Formats a number as a currency string with comma separators,
+             * using Philippine Peso (₱) symbol and locale.
+             * @param {number} number The number to format.
+             * @returns {string} The formatted currency string.
+             */
+            function formatCurrency(number) {
+                // Use 'en-PH' for Philippine locale formatting
+                return new Intl.NumberFormat('en-PH', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(number);
+            }
+
+            /**
+             * Shows a temporary message box at the bottom of the screen.
+             * @param {string} message The message to display.
+             * @param {number} duration The duration in milliseconds (default: 2500ms).
+             */
+            function showMessageBox(message, duration = 2500) {
+                messageBox.textContent = message;
+                messageBox.classList.add('show'); // Add 'show' class to make it visible
+                setTimeout(() => {
+                    messageBox.classList.remove('show'); // Remove 'show' class to hide after duration
+                }, duration);
+            }
+
+            /**
+             * Calculates the total amount from all products, service fee, and delivery fee,
+             * then updates the total display and regenerates the summary.
+             */
+            function calculateTotal() {
+                let total = 0;
+                // Sum prices from all products stored in productData Map
+                productData.forEach((product) => {
+                    total += product.price;
+                });
+
+                // Add service and delivery fees
+                const serviceFee = parseFloat(serviceFeeInput.value) || 0;
+                const deliveryFee = parseFloat(deliveryFeeInput.value) || 0;
+
+                total += serviceFee;
+                total += deliveryFee;
+
+                // Update the total display
+                totalDisplay.textContent = `₱${formatCurrency(total)}`;
+                generateSummary(); // Always regenerate summary when total changes
+            }
+
+            /**
+             * Adds a new product input row to the UI and initializes its corresponding data.
+             */
+            function addNewProduct() {
+                productCounter++;
+                const productId = `product-${productCounter}`; // Generate a unique ID for the new product
+
+                // Create the new product item div
+                const productItem = document.createElement('div');
+                productItem.classList.add('product-item');
+                productItem.setAttribute('data-id', productId); // Store the unique ID as a data attribute
+                productItem.innerHTML = `
+                    <input type="text" class="product-name" placeholder="Product name" aria-label="Product Name">
+                    <div class="input-group">
+                        <span class="input-prefix">₱</span>
+                        <input type="number" class="product-price input-field" placeholder="0.00" min="0" step="0.01" value="" aria-label="Product Price">
+                    </div>
+                    <button type="button" class="button remove-product" aria-label="Remove Product">x</button>
+                `;
+                productList.appendChild(productItem); // Add the new item to the product list container
+
+                // Initialize the product data in the Map
+                productData.set(productId, { name: '', price: 0 });
+
+                // Get references to the newly created input fields and button
+                const nameInput = productItem.querySelector('.product-name');
+                const priceInput = productItem.querySelector('.product-price');
+                const removeBtn = productItem.querySelector('.remove-product');
+
+                nameInput.focus(); // Automatically focus on the new product name input for quick entry
+
+                // Add event listeners for the new product row
+                nameInput.addEventListener('input', (e) => {
+                    // Update the product name in the Map
+                    productData.get(productId).name = e.target.value.trim();
+                    generateSummary(); // Regenerate summary when name changes
+                });
+
+                priceInput.addEventListener('input', (e) => {
+                    // Update the product price in the Map
+                    productData.get(productId).price = parseFloat(e.target.value) || 0;
+                    calculateTotal(); // Recalculate total when price changes
+                });
+
+                removeBtn.addEventListener('click', () => {
+                    productItem.remove(); // Remove the product row from the DOM
+                    productData.delete(productId); // Remove the product data from the Map
+                    calculateTotal(); // Recalculate total after removal
+                });
+
+                calculateTotal(); // Update total after adding a new product
+            }
+
+            // Event listeners for service and delivery fee inputs
+            serviceFeeInput.addEventListener('input', calculateTotal);
+            deliveryFeeInput.addEventListener('input', calculateTotal);
+
+            // Event listener for the "Add Product" button
+            addProductBtn.addEventListener('click', addNewProduct);
+
+            /**
+             * Generates and displays a detailed summary of all products, fees, and total.
+             */
+            function generateSummary() {
+                let summaryText = "Invoice\n\n";
+                let hasValidProducts = false;
+                // subtotal is still calculated internally for the total, but not displayed
+                let subtotal = 0; 
+
+                // Iterate through product data to build the product list in the summary
+                productData.forEach((product) => {
+                    if (product.name || product.price > 0) {
+                        summaryText += `• ${product.name || 'Unnamed Product'}: ₱${formatCurrency(product.price)}\n`;
+                        subtotal += product.price;
+                        hasValidProducts = true;
+                    }
+                });
+
+                // Add messages for empty product lists
+                if (!hasValidProducts && productData.size === 0) {
+                    summaryText += "No products added.\n";
+                } else if (!hasValidProducts && productData.size > 0) {
+                    summaryText += "No product details entered.\n";
+                }
+
+                // Get fee values
+                const serviceFee = parseFloat(serviceFeeInput.value) || 0;
+                const deliveryFee = parseFloat(deliveryFeeInput.value) || 0;
+                const total = subtotal + serviceFee + deliveryFee;
+
+                // Add fee and total information to the summary
+                summaryText += "\n";
+                if (serviceFee > 0) { // Only show service fee if greater than 0
+                    summaryText += `Service Fee: ₱${formatCurrency(serviceFee)}\n`;
+                }
+                summaryText += `Delivery Fee: ₱${formatCurrency(deliveryFee)}\n`;
+                summaryText += `\nTotal: ₱${formatCurrency(total)}\n`;
+
+                summaryContent.textContent = summaryText; // Update the summary display
+                summarySection.style.display = 'block'; // Ensure summary section is visible
+            }
+
+            // Event listener for the "Copy Summary" button
+            copySummaryBtn.addEventListener('click', () => {
+                const textToCopy = summaryContent.textContent;
+                const textArea = document.createElement('textarea');
+                textArea.value = textToCopy;
+                // Make it temporarily visible and selectable, but off-screen
+                textArea.style.position = 'absolute';
+                textArea.style.left = '-9999px';
+                textArea.style.top = '-9999px';
+                textArea.style.opacity = '0'; // Keep it invisible to the user
+                document.body.appendChild(textArea);
+                
+                textArea.focus();
+                textArea.select(); // Select the text in the textarea
+
+                try {
+                    const successful = document.execCommand('copy'); // Execute copy command
+                    const msg = successful ? 'Summary copied to clipboard!' : 'Failed to copy summary. Please try manually selecting the text.';
+                    showMessageBox(msg);
+                } catch (err) {
+                    showMessageBox('Error copying text: ' + err + '. Please try manually selecting the text.');
+                    console.error('Error copying text:', err);
+                } finally {
+                    document.body.removeChild(textArea); // Clean up the textarea
+                }
+            });
+        });
+    </script>
+</body>
+</html>
